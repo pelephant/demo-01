@@ -1,0 +1,81 @@
+---
+# tasks file for vagrant-ubuntu
+- name: Install docker docker-compose
+  apt:
+    update_cache: yes
+    pkg:
+    - docker
+    - docker-compose
+
+- name: download node exporter
+  get_url:
+    url: https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
+    dest: /tmp
+- name: unarchive node exporter
+  unarchive:
+    remote_src: yes
+    src: /tmp/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
+    dest: /tmp
+- name: move node exporter to /usr/local/bin
+  copy:
+    src: /tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter
+    dest: /usr/local/bin/node_exporter
+    remote_src: yes
+    owner: root
+    group: root
+    mode: 0755
+- name: install unit file to systemd
+  template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    owner: root
+    group: root
+    mode: 0600
+- name: configure systemd to use service
+  systemd:
+    daemon_reload: yes
+    enabled: yes
+    state: started
+    name: node_exporter.service
+
+- name: create a directory for config
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0777
+  with_items:
+    - /u01/
+    - /u01/grafana/provisioning/dashboards/
+    - /u01/grafana/provisioning/datasources/
+    - /u01/prometheus/
+
+- name: ansible copy docker-compose.yml
+  copy:
+   src: ./vagrant-ubuntu/files/docker-compose.yml
+   dest: /u01/
+
+- name: ansible copy prometheus node config
+  copy:
+   src: ./vagrant-ubuntu/files/prometheus.yml
+   dest: /u01/prometheus/
+
+- name: ansible copy grafana datasources config
+  copy:
+   src: ./vagrant-ubuntu/files/datasources.yml
+   dest: /u01/grafana/provisioning/datasources/
+
+- name: ansible copy grafana dashboards config
+  copy:
+   src: ./vagrant-ubuntu/files/providers.yml
+   dest: /u01/grafana/provisioning/dashboards/
+
+- name: ansible copy grafana dashboard node-exporter-full
+  copy:
+   src: ./vagrant-ubuntu/files/node-exporter-full_rev29.json
+   dest: /u01/grafana/provisioning/dashboards/
+
+- name: docker-compose up
+  shell: >
+    cd /u01; 
+    docker-compose up -d
+
